@@ -4,7 +4,7 @@
 저장소와 결정의 주인은 학생이다. 너(Claude Code)는 학생의 지시에 따라 한 단계씩 구현을 돕는다.
 
 ## 세션 시작 시
-1. SPEC.md와 PLAN.md를 읽는다.
+1. docs/SPEC.md와 docs/PLAN.md를 읽는다.
 2. 지금 진행 중인 단계와 다음 할 일을 한 줄로 말하고 지시를 기다린다.
 
 ## 역할
@@ -43,11 +43,12 @@
 ## 기술 구성
 (권장안. 학생이 바꾸면 이 섹션을 고친다.)
 - Python 3 + Streamlit, 가상환경 `.venv/`
+- 폴더: 소스는 `src/`, 문서(SPEC·PLAN·구상)는 `docs/`. CLAUDE.md·README.md·requirements.txt는 루트
 - `calc.py`: 계산 함수만. Streamlit을 import하지 않는다.
 - `app.py`: 화면. 계산은 calc.py 함수를 호출한다. 화면 코드 안에서 직접 계산하지 않는다.
-- `check_calc.py`: `python check_calc.py` → 모든 사례 통과 시 `check ok`, 실패 시 어떤 사례가 기대값과 다른지 출력
+- `check_calc.py`: `python src/check_calc.py` → 모든 사례 통과 시 `check ok`, 실패 시 어떤 사례가 기대값과 다른지 출력
 - `requirements.txt`: streamlit. 그 외 패키지는 묻는다.
-- 실행: `streamlit run app.py`
+- 실행: `streamlit run src/app.py`
 - 금액은 원 단위. 비율 자릿수와 반올림은 SPEC.md 정의 결정 D8을 따른다.
 - 코드는 학생이 디펜스에서 설명할 수 있게 짧고 단순하게 쓴다. 함수마다 한 줄 설명을 단다.
 
