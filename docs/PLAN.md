@@ -8,9 +8,12 @@
 
 | # | 단계 | 완료 기준 (SPEC 4번 #) | 확인 방법 | 상태 | 커밋 |
 |---|---|---|---|---|---|
-| 1 | `calc.py`(계산 함수) + `check_calc.py`(C1~C4, E1, E2) | #5 | `python src/check_calc.py` → `check ok` | 확인 대기 | |
-| 2 | `.venv` 재생성, `requirements.txt`, streamlit 설치, `app.py` 화면 (사이드바·숫자 카드·메뉴 탭·시나리오 탭) | #1~4 | `streamlit run src/app.py`에 C1·C2·C3·E1 입력 → SPEC 값과 같음 | 확인 대기 | |
-| 3 | 화면 스크린샷, README (학생) | — | — | 대기 | |
+| 1 | `calc.py`(계산 함수) + `check_calc.py`(C1~C4, E1, E2) | #6 | `python src/check_calc.py` → `check ok` | 확인 대기 | |
+| 2 | `.venv` 재생성, `requirements.txt`, streamlit 설치, `app.py` 화면 (사이드바·숫자 카드·메뉴 탭·시나리오 탭) | SPEC 개정 전 #1~4 (C1·C2·C3·E1) | `streamlit run src/app.py`에 C1·C2·C3·E1 입력 → SPEC 값과 같음 | 확인 대기 | |
+| 3 | `calc.py`에 레시피 1잔 원가 함수 추가, `check_calc.py`에 R1·R2·E3·E4 추가 (기존 사례 유지) | #1·2·4·6 | `python src/check_calc.py` → `check ok` | 대기 (승인 필요) | |
+| 4 | `price_agent.py`(새): 재료마다 네이버 쇼핑 검색 → NVIDIA LLM이 관련 상품을 거르고 구매량(g/ml)을 읽음 → 단위당 최저가 상품의 구매가·구매량·링크. 패키지 추가 없음(`urllib`) | #3·5(E5) | 키 없이 호출 → 이유 문자열 / 키 있을 때 메뉴 1개 실제 호출 (무료 한도 사용, 학생 승인 후) | 대기 (승인 필요) | |
+| 5 | `app.py`를 메뉴 조회 화면으로 교체 (메뉴 선택·단가 검색·단가 표·희망 판매가·원가·마진). 손익분기·시나리오 탭은 화면에서 뺌 | #1~5 | `streamlit run src/app.py`에 R1·R2·E3·E4·E5 입력 → SPEC 값과 같음 | 대기 (승인 필요) | |
+| 6 | 화면 스크린샷, README (학생) | — | — | 대기 | |
 
 ## 진행 기록
 
@@ -72,6 +75,31 @@
         (C1·E1은 표 편집이 필요해 AppTest로 하지 못함. 학생이 화면에서 확인)
       제안 커밋 메시지: feat: Streamlit 화면(app.py)과 requirements.txt 추가
 
+- Claude 보고 (학생 재지시: 예시 메뉴 12개로 확대):
+
+      바꾼 파일: src/app.py (EXAMPLE만)
+      한 일: 라떼 → 카페라떼로 이름 변경, 메뉴 10개 추가. 판매가·원가는 개인 카페 수준으로 어림한 가상 값.
+      세운 가정: 아메리카노·카페라떼는 C2 값 유지. 월 판매량은 지시에 없어 Claude가 정함(합계 2,590잔).
+                 check_calc.py는 SPEC 사례를 쓰므로 그대로 둠("라떼" 이름 유지).
+      영향: 기본 화면이 더 이상 C2와 같지 않음. C2·C3 확인은 표에서 아메리카노·카페라떼만 남겨야 함.
+      내가 실행한 명령과 실제 출력:
+        $ .venv/bin/python src/check_calc.py → check ok
+        $ AppTest 기본 화면 → 예외 없음, 카드 3,347,704원 / 1,552잔 / 8,015,977원 (SPEC 기대값 없음, 동작 확인용)
+      제안 커밋 메시지: feat: 예시 메뉴를 12개로 확대
+
+- Claude 보고 (학생 재지시: 메뉴를 파일로 분리, 레시피 파일 추가):
+
+      바꾼 파일: src/menu.csv(새), src/recipe.csv(새), src/app.py(EXAMPLE을 menu.csv에서 읽음)
+      한 일: EXAMPLE 값을 그대로 menu.csv로 옮김. recipe.csv에 12개 메뉴의 재료·용량·단위(g/ml) 46행 작성.
+      세운 가정: 둘 다 표 모양이라 JSON 대신 CSV. 파일명은 recipe.csv(지시의 reciepe는 오타로 봄).
+                 recipe.csv는 앱에서 쓰지 않음 — 레시피로 원가를 계산하면 SPEC D1 (b)이고 「3. 범위 제외」에 해당.
+                 레시피는 아이스 1잔(약 400ml 컵) 기준. 컵·뚜껑·빨대 등 포장재는 넣지 않음.
+      내가 실행한 명령과 실제 출력:
+        $ AppTest 기본 화면 → 예외 없음, 카드 3,347,704원 / 1,552잔 / 8,015,977원 (분리 전과 같음)
+        $ menu.csv·recipe.csv 메뉴 이름 대조 → 레시피 없는 메뉴: 없음 / 메뉴에 없는 레시피: 없음
+        $ .venv/bin/python src/check_calc.py → check ok
+      제안 커밋 메시지: refactor: 예시 메뉴를 menu.csv로 분리, recipe.csv 추가
+
 - 내가 확인한 것:
 - 결정: 유지 (커밋 ) / 폐기 (restore) / 다시 지시 (무엇을)
 - 증거 후보:
@@ -86,3 +114,7 @@ SPEC이나 계획을 바꾸면 여기에 남긴다.
 | 2026-10-20 | D1 (b) 재료 환산 → (a) 1잔 원가 직접 입력, D6 본인 인건비 칸 제거, D7 시나리오를 % 슬라이더로 | 범위 축소. 교수님 코멘트 "기능은 간단, UI/UX에 힘을" |
 | 2026-10-20 | 손 계산 사례를 Claude가 검산 쉬운 숫자로 작성, 학생은 검산만 | 학생이 손 계산 생략을 원함. 검증 근거는 남기기 위해 최소한으로 유지 |
 | 2026-10-20 | 폴더 정리: 소스 `src/`, 문서 `docs/`. CLAUDE.md·README.md는 루트 | 학생 지시. 실행 경로는 `python src/check_calc.py`, `streamlit run src/app.py` |
+| 2026-10-20 | 예시 메뉴 12개, `menu.csv`·`recipe.csv`로 분리 | 학생 지시. 시연용 메뉴를 현실적으로 |
+| 2026-10-20 | D1 (a)→(c) 레시피 × LLM 검색 단가 + 포장비 공통 300원. 화면을 메뉴 하나씩 조회로 교체. D5·D6·D7(손익분기·시나리오) 보류. D10·D11 추가. SPEC·CLAUDE.md를 Claude가 수정 (규칙 1 예외) | 학생 지시. 공지는 외부 API를 금지하지 않음(키 커밋만 금지). 모델은 학생이 sonnet 선택 |
+| 2026-10-20 | CLAUDE.md 규칙 7(API 키는 셸 환경변수로만), 규칙 8(검색 결과는 화면에만), 기술 구성(price_agent.py) 수정 | 위 변경에 맞춤. 키 없는 사람도 쓰도록 D11 |
+| 2026-10-20 | 단가 검색을 Claude API(sonnet) → 네이버 쇼핑 검색 API + NVIDIA 무료 LLM으로 변경 | 학생 지시: 무료 API 사용. Claude API는 Pro 구독과 별도 결제. NVIDIA는 웹 검색이 없어 가격 출처로 네이버 쇼핑 사용 |

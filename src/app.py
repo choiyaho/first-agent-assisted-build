@@ -1,16 +1,14 @@
 """calffeine 화면. 계산은 calc.py 함수를 호출하고, 여기서는 입력과 표시만 한다."""
+from pathlib import Path
+
 import pandas as pd
 import streamlit as st
 
 from calc import apply_scenario, cost_ratio, margin_ratio, pct1, profit_per_cup, round_won, summary
 
-# 가상의 예시 메뉴 (SPEC D9). SPEC 5번 C2와 같은 값
-EXAMPLE = pd.DataFrame(
-    [
-        {"메뉴": "아메리카노", "판매가": 4400, "1잔 원가": 1000, "월 판매량": 1000},
-        {"메뉴": "라떼", "판매가": 5500, "1잔 원가": 1500, "월 판매량": 500},
-    ]
-)
+# 가상의 예시 메뉴 (SPEC D9). 첫 두 줄은 SPEC 5번 C2와 같은 값, 나머지는 개인 카페 수준으로 어림한 가상 값
+# 실행 위치와 상관없이 찾도록 app.py 옆의 파일을 읽는다
+EXAMPLE = pd.read_csv(Path(__file__).parent / "menu.csv")
 
 
 def won(x):

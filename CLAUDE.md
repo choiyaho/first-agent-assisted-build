@@ -18,8 +18,8 @@
 4. PLAN.md 단계에 적히지 않은 새 파일 생성, 패키지 추가·설치, 파일 삭제, 저장소 밖 접근은 먼저 묻는다.
 5. git add / commit / push / restore를 실행하지 않는다. 커밋 메시지는 제안만 한다.
 6. 다른 프로젝트·튜토리얼·템플릿의 코드를 가져오지 않는다.
-7. 이 프로젝트는 API 키가 필요 없다. .env를 만들거나 읽지 않는다.
-8. 예시 데이터는 가상의 값만 쓴다. 실제 가게·사람 정보를 넣지 않는다.
+7. API 키(`NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`, `NVIDIA_API_KEY`)는 셸 환경변수로만 넘긴다. .env·secrets 파일을 만들거나 읽지 않는다. 키를 코드·문서·출력에 쓰지 않는다.
+8. 예시 데이터는 가상의 값만 쓴다. 실제 가게·사람 정보를 넣지 않는다. 예외: 재료 단가 검색 결과(실제 판매처·가격)는 화면에만 보여주고 파일로 저장하거나 커밋하지 않는다.
 
 ## 단계 보고
 단계가 끝나면 아래 형식으로 답한다. 같은 내용을 PLAN.md「진행 기록」에 추가하고, 그 단계 상태를「확인 대기」로 바꾼다.
@@ -37,22 +37,25 @@
 - "완료됐다"는 말 대신 실행한 명령과 실제 출력을 보여준다.
 - check_calc.py의 기대값은 SPEC.md「5. 손 계산 사례」에서만 가져온다. calc.py를 실행해 나온 값을 기대값으로 쓰지 않는다.
 - 검사가 실패하면 고치기 전에 실패 내용을 먼저 보고한다.
-- 경계 사례(판매가 ≤ 변동원가, 판매량 0, 빈 입력, 음수)는 오류로 멈추지 않고 화면에 이유를 보여준다.
+- LLM 단가 검색 결과는 실행마다 다르므로 기대값으로 쓰지 않는다. check_calc.py는 SPEC 5번의 가상 단가로 원가 계산만 검사한다.
+- 경계 사례(판매가 ≤ 변동원가, 판매량 0, 빈 입력, 음수, 단가 빈 칸·구매량 0, API 키 없음, 검색 실패)는 오류로 멈추지 않고 화면에 이유를 보여준다.
 - 올림·나눗셈은 정수로 곱한 뒤 마지막에 한 번 나눈다. 소수 가중평균 뒤 올림하지 않는다.
 
 ## 기술 구성
 (권장안. 학생이 바꾸면 이 섹션을 고친다.)
-- Python 3 + Streamlit, 가상환경 `.venv/`
-- 폴더: 소스는 `src/`, 문서(SPEC·PLAN·구상)는 `docs/`. CLAUDE.md·README.md·requirements.txt는 루트
-- `calc.py`: 계산 함수만. Streamlit을 import하지 않는다.
-- `app.py`: 화면. 계산은 calc.py 함수를 호출한다. 화면 코드 안에서 직접 계산하지 않는다.
-- `check_calc.py`: `python src/check_calc.py` → 모든 사례 통과 시 `check ok`, 실패 시 어떤 사례가 기대값과 다른지 출력
+- Python 3.12 + Streamlit + 네이버 쇼핑 검색 API + NVIDIA 무료 LLM API, 가상환경 `.venv/`. 두 API는 파이썬 기본 라이브러리(`urllib`)로 호출한다
+- 폴더: 소스·예시 데이터(`menu.csv`, `recipe.csv`)는 `src/`, 문서(SPEC·PLAN·구상)는 `docs/`. CLAUDE.md·README.md·requirements.txt는 루트
+- `calc.py`: 계산 함수만. Streamlit을 import하지 않고 API를 호출하지 않는다.
+- `price_agent.py`: 네이버 쇼핑 검색 + NVIDIA LLM으로 재료 단가 후보를 찾아 돌려주기만 한다. 원가·마진을 계산하지 않는다.
+- `app.py`: 화면. 계산은 calc.py, 검색은 price_agent.py를 호출한다. 화면 코드 안에서 직접 계산하지 않는다.
+- `check_calc.py`: `python src/check_calc.py` → 모든 사례 통과 시 `check ok`, 실패 시 어떤 사례가 기대값과 다른지 출력. API를 호출하지 않는다.
 - `requirements.txt`: streamlit. 그 외 패키지는 묻는다.
-- 실행: `streamlit run src/app.py`
+- 실행: 키 3개를 `export` 한 뒤 `streamlit run src/app.py` (키가 없어도 앱은 실행되고 단가 직접 입력 가능)
+- 외부 API 실제 호출은 무료 한도를 쓰므로 Claude가 실행하기 전에 묻는다.
 - 금액은 원 단위. 비율 자릿수와 반올림은 SPEC.md 정의 결정 D8을 따른다.
 - 코드는 학생이 디펜스에서 설명할 수 있게 짧고 단순하게 쓴다. 함수마다 한 줄 설명을 단다.
 
 ## 문서
 - README.md의「Work process」「Claude Code evidence」「Three effective practices」「Three difficulties」는 쓰지 않는다. 학생이 쓴다.
 - 요청받으면「How to run / use」초안만 쓸 수 있다.
-- 커밋하면 안 되는 것: .env, .venv/, __pycache__/, 영상(*.mp4, *.mov), 대용량 데이터, 개인정보.
+- 커밋하면 안 되는 것: API 키, .env, .venv/, __pycache__/, 영상(*.mp4, *.mov), 대용량 데이터, 개인정보, 단가 검색 결과.
