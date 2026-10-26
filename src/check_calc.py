@@ -1,6 +1,6 @@
 """calc.py를 SPEC.md「5. 손 계산 사례」기대값과 비교한다. 기대값은 SPEC에서만 가져온다."""
-from calc import (apply_scenario, cost_ratio, loss_count, margin_ratio, pct1, profit_per_cup, recovery_rate,
-                  round_won, sales_shares, sort_menus, summary)
+from calc import (apply_scenario, breakeven_qty_change, cost_ratio, loss_count, margin_ratio, pct1, profit_per_cup,
+                  recovery_rate, round_won, sales_shares, sort_menus, summary)
 
 FEE = 2  # SPEC 5번 공통 수수료율 2%
 AMERICANO = {"name": "아메리카노", "price": 4400, "cost": 1000, "qty": 1000}
@@ -70,6 +70,9 @@ check("C8", "월 이익", round_won(summary([AMERICANO, {**LATTE, "qty": 0}], 5_
 check("C9", "회수율 현재·A·B", [pct1(recovery_rate(ms, 5_000_000, FEE)) for ms in
                               (C2_MENUS, apply_scenario(C2_MENUS, 10, -10), apply_scenario(C2_MENUS, -10, 20))], [92.1, 94.4, 95.3])
 
+# C10: 판매가만 바꿨을 때 지금 월 이익을 지키는 판매량 변화 (판매량 기준)
+check("C10", "가격 +10%·−10%", [pct1(breakeven_qty_change(C2_MENUS, p, FEE)) for p in (10, -10)], [-12.1, 16.0])
+
 # E3: C2에 손해 메뉴(E1 디저트) 추가
 check("E3", "손해 메뉴 수", loss_count(C2_MENUS + [dessert], FEE), 1)
 
@@ -80,5 +83,8 @@ check("E4", "손해 메뉴 수", loss_count([{"name": "이익 0원", "price": 44
 # E5: 판매량 모두 0 → 비중 "-"(None), 회수율 "손익분기 없음"(None)
 check("E5", "매출 비중", sales_shares(NO_SALES), [None, None])
 check("E5", "회수율", recovery_rate(NO_SALES, 5_000_000, FEE), None)
+
+# E6: 지금 남긴 돈이 0 이하면 판매량 기준을 계산할 수 없음
+check("E6", "판매량 기준", breakeven_qty_change([dessert], 10, FEE), None)
 
 print("\n".join(failures) if failures else "check ok")

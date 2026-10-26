@@ -33,10 +33,15 @@ def margin_ratio(price, cost, fee_pct):
     return profit_per_cup(price, cost, fee_pct) / Fraction(price)
 
 
+def contribution(menus, fee_pct):
+    """메뉴를 팔아 남긴 돈(공헌이익) = Σ(1잔 이익 × 판매량). 고정비는 빼기 전."""
+    return sum(profit_per_cup(m["price"], m["cost"], fee_pct) * Fraction(m["qty"]) for m in menus)
+
+
 def summary(menus, fixed_cost, fee_pct):
     """가게 전체 월 이익과 손익분기 잔 수·매출액. 손익분기가 없으면 None과 이유 (SPEC D5)."""
     total_qty = sum(Fraction(m["qty"]) for m in menus)
-    total_profit = sum(profit_per_cup(m["price"], m["cost"], fee_pct) * Fraction(m["qty"]) for m in menus)
+    total_profit = contribution(menus, fee_pct)
     total_sales = sum(Fraction(m["price"]) * Fraction(m["qty"]) for m in menus)
     result = {"monthly_profit": total_profit - fixed_cost, "be_cups": None, "be_sales": None, "reason": None}
     if total_qty == 0:
@@ -52,7 +57,7 @@ def summary(menus, fixed_cost, fee_pct):
 
 def recovery_rate(menus, fixed_cost, fee_pct):
     """고정비 회수율 = Σ(1잔 이익×판매량) ÷ 월 고정비. Σ ≤ 0이면 None("손익분기 없음") (SPEC D12)."""
-    total_profit = sum(profit_per_cup(m["price"], m["cost"], fee_pct) * Fraction(m["qty"]) for m in menus)
+    total_profit = contribution(menus, fee_pct)
     return None if total_profit <= 0 else total_profit / Fraction(fixed_cost)
 
 
@@ -100,6 +105,15 @@ def apply_scenario(menus, price_pct, qty_pct):
     p = 1 + Fraction(str(price_pct)) / 100
     q = 1 + Fraction(str(qty_pct)) / 100
     return [{**m, "price": Fraction(m["price"]) * p, "qty": Fraction(m["qty"]) * q} for m in menus]
+
+
+def breakeven_qty_change(menus, price_pct, fee_pct):
+    """판매가만 price_pct% 바꿨을 때 지금 월 이익을 지키는 판매량 변화율 (−0.121 = 12.1% 줄어도 같음).
+    지금이나 바꾼 가격에서 남긴 돈이 0 이하면 None (SPEC D7)."""
+    now = contribution(menus, fee_pct)
+    new = contribution(apply_scenario(menus, price_pct, 0), fee_pct)
+    # 고정비는 그대로이므로 남긴 돈이 같으면 월 이익도 같다: 판매량 배수 × new = now
+    return None if now <= 0 or new <= 0 else now / new - 1
 
 
 def round_won(x):

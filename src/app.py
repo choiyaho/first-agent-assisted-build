@@ -4,8 +4,8 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from calc import (SORT_BY, apply_scenario, cost_ratio, is_loss, loss_count, margin_ratio, pct1, profit_per_cup,
-                  recovery_rate, round_won, sales_shares, sort_menus, summary)
+from calc import (SORT_BY, apply_scenario, breakeven_qty_change, cost_ratio, is_loss, loss_count, margin_ratio, pct1,
+                  profit_per_cup, recovery_rate, round_won, sales_shares, sort_menus, summary)
 
 # 가상의 예시 메뉴 (SPEC D9). 실행 위치와 상관없이 찾도록 app.py 옆의 파일을 읽는다
 EXAMPLE = pd.read_csv(Path(__file__).parent / "menu.csv")
@@ -62,6 +62,17 @@ def be_text(s):
 def rate_text(rate):
     """고정비 회수율 문자열. 계산할 수 없으면 '손익분기 없음' (SPEC D12)."""
     return "손익분기 없음" if rate is None else pct(rate)
+
+
+def qty_guide(change):
+    """판매량 기준 문장. 예상한 판매량 변화가 이 기준보다 좋으면 지금보다 남는다 (SPEC D7)."""
+    if change is None:
+        return "판매량 기준: 계산할 수 없음. 지금이나 바꾼 가격에서는 메뉴를 팔수록 손해입니다."
+    if change < 0:
+        return f"판매량 기준: 판매량이 최대 **{pct(-change)}** 줄어도 지금만큼 남습니다."  # 굵게 뒤에 조사가 붙으면 마크다운이 안 닫힌다
+    if change > 0:
+        return f"판매량 기준: 판매량이 **{pct(change)}** 넘게 늘어야 지금보다 남습니다."
+    return "판매량 기준: 가격이 그대로면 판매량이 는 만큼 더 남습니다."
 
 
 def menus_in_input_order():
@@ -211,14 +222,15 @@ with tab_scn:
         st.info("메뉴를 추가하면 시나리오를 비교할 수 있습니다.")
     else:
         st.subheader("가격을 바꾸면 한 달에 얼마나 남을까?")
-        st.caption("가격을 올리면 손님이 줄고, 내리면 늘 수 있습니다. 두 가지 경우를 A안·B안으로 정해 지금과 비교해 보세요. "
-                   "모든 메뉴에 같은 비율로 적용됩니다.")
+        st.caption("가격을 올리면 손님이 줄고, 내리면 늘 수 있습니다. A안·B안마다 가격을 바꿔 보고 판매량이 얼마나 변할지 "
+                   "예상해 보세요. 예상이 각 안 아래의 판매량 기준보다 좋으면 지금보다 남습니다. 모든 메뉴에 같은 비율로 적용됩니다.")
         scenario_menus = {"지금": menus}
         for col, name, price0, qty0 in zip(st.columns(2, gap="large"), ["A", "B"], [10, -10], [-10, 20]):
             with col.container(border=True):
                 st.markdown(f"**{name}안**")
                 price = st.slider("판매가를 이만큼 바꾸면", -50, 50, price0, format="%+d%%", key=f"{name.lower()}_price")
                 qty = st.slider("판매량은 이만큼 바뀔 것 같다", -50, 50, qty0, format="%+d%%", key=f"{name.lower()}_qty")
+                st.caption(qty_guide(breakeven_qty_change(menus, price, fee_pct)))
             scenario_menus[f"{name}안 (가격 {price:+d}%, 판매량 {qty:+d}%)"] = apply_scenario(menus, price, qty)
         scenarios = {k: summary(ms, fixed_cost, fee_pct) for k, ms in scenario_menus.items()}
         rates = {k: recovery_rate(ms, fixed_cost, fee_pct) for k, ms in scenario_menus.items()}
@@ -254,5 +266,8 @@ with st.expander("용어 설명", key="glossary"):
         "- **매출 비중** = 메뉴 매출(판매가 × 월 판매량) ÷ 전체 매출. 반올림 때문에 합이 100%가 아닐 수 있습니다.\n"
         "- **고정비 회수율** = 메뉴를 팔아 남긴 돈(1잔 이익 × 월 판매량의 합) ÷ 월 고정비. 100% 이상이면 흑자입니다.\n"
         "- **손해 메뉴** = 1잔 이익이 0원 이하인 메뉴\n"
-        "- **손익분기** = 월 이익이 0원이 되는 판매량. 메뉴 판매 비중은 지금 입력한 그대로로 봅니다."
+        "- **손익분기** = 월 이익이 0원이 되는 판매량. 메뉴 판매 비중은 지금 입력한 그대로로 봅니다.\n"
+        "- **판매량 기준** = 가격만 바꿨을 때 지금 월 이익을 지키는 판매량 변화(손익분기 판매량 변화). "
+        "가격탄력성 연구(외식 평균 0.81 등)는 시장 전체 기준이라 손님이 옆 가게로 옮길 수 있는 가게 한 곳에는 "
+        "그대로 쓸 수 없습니다. 그래서 판매량 변화는 사장님이 예상하고, 앱은 판단 기준이 되는 이 값을 계산합니다."
     )
