@@ -12,6 +12,29 @@ EXAMPLE = pd.read_csv(Path(__file__).parent / "menu.csv")
 # 메뉴 하나의 입력 칸. 값은 입력 칸 key(f"{칸}_{메뉴 ID}")의 session_state에만 둔다 → 고치는 곳이 한 군데 (SPEC D10)
 FIELDS = ["name", "price", "cost", "qty"]
 
+# Streamlit 옵션으로 안 되는 화면 다듬기만 CSS로 한다. key를 준 위젯에는 Streamlit이 `st-key-<key>` 클래스를 붙인다
+STYLE = """<style>
+/* 로고: 기본 h1(2.75rem)의 2배 이상. 좁은 화면에서는 화면 폭에 맞춰 줄인다 */
+[data-testid="stHeading"] h1 { font-size: clamp(3rem, 14vw, 6rem) !important; line-height: 1.1; }
+
+/* 메뉴명·판매량·정렬 기준 칸: 평소엔 글자 길이에 맞추고, 누르면 끝까지 늘었다가, 다 쓰면 다시 글자에 맞춘다 */
+/* 칸 묶음(라벨 포함) → 테두리 상자 → 글자 칸, 세 겹 모두 평소엔 내용 폭, 누르면(:focus-within) 끝까지 */
+:root { interpolate-size: allow-keywords; }
+[class*="st-key-name_"], [class*="st-key-qty_"], .st-key-sort_by { width: fit-content !important; max-width: 100%; }
+[class*="st-key-qty_"] [data-testid="stNumberInputContainer"], .st-key-sort_by [role="group"] { width: fit-content; }
+[class*="st-key-name_"] input, [class*="st-key-qty_"] input, .st-key-sort_by input { field-sizing: content; min-width: 3ch; }
+[class*="st-key-name_"]:focus-within, [class*="st-key-qty_"]:focus-within, .st-key-sort_by:focus-within { width: 100% !important; }
+[class*="st-key-qty_"]:focus-within [data-testid="stNumberInputContainer"], .st-key-sort_by:focus-within [role="group"] { width: 100%; }
+[class*="st-key-name_"]:focus-within input, [class*="st-key-qty_"]:focus-within input, .st-key-sort_by:focus-within input { field-sizing: fixed; width: 100%; }
+/* 정렬 기준은 목록 창이 칸 폭을 따라가므로 애니메이션 없이 바로 늘린다 */
+[class*="st-key-name_"], [class*="st-key-qty_"] { transition: width .2s ease; }
+
+/* 용어 설명: 접혀 있으면 제목 길이만큼, 펼치면 끝까지 */
+.st-key-glossary details:not([open]) { width: fit-content; }
+
+@media (prefers-reduced-motion: reduce) { [class*="st-key-"] { transition: none; } }
+</style>"""
+
 
 def won(x):
     """금액을 '1,234원' 문자열로. 반올림은 여기서만 한다."""
@@ -93,6 +116,7 @@ def draw_card(m, share, fee_pct):
 
 
 st.set_page_config(page_title="calffeine", page_icon="☕", layout="wide")
+st.html(STYLE)  # style만 있으면 화면에 자리를 차지하지 않는다
 
 # ① 사이드바: 고정비·수수료율 (SPEC D15: 고정비 1원 이상)
 with st.sidebar:
@@ -114,28 +138,33 @@ by_id = {m["id"]: m for m in menus}
 shown = [by_id[i] for i in st.session_state.order]  # 카드에 보이는 순서
 
 st.title("☕ calffeine")
-st.caption("메뉴 가격을 감이 아니라 숫자로 정하기. 입력한 값은 저장되지 않습니다.")
 
-# ② 대시보드 (SPEC D10·D12)
+# ② 대시보드: 한 줄에 한 항목씩, 이름·뜻은 왼쪽 숫자는 오른쪽 (SPEC D10·D12)
 if menus:
     s = summary(menus, fixed_cost, fee_pct)
     rate = recovery_rate(menus, fixed_cost, fee_pct)
     profit = s["monthly_profit"]
-    if profit >= 0:
-        st.subheader(f"이 계획대로면 한 달에 {won(profit)}을 남깁니다")
-    else:
-        st.subheader(f"이 계획대로면 한 달에 {won(-profit)} 적자입니다")
-    if rate is not None:
-        st.progress(float(min(rate, 1)), text=f"메뉴를 팔아 남긴 돈으로 고정비의 {pct(rate)}를 메웁니다")
     cups, sales = be_text(s)
-    c = st.columns(5)
-    c[0].metric("월 이익 (고정비 반영)", won(profit))
-    c[1].metric("손익분기 판매량", cups)
-    c[2].metric("손익분기 매출액", sales)
-    c[3].metric("고정비 회수율", rate_text(rate))
-    c[4].metric("손해 메뉴", f"{loss_count(menus, fee_pct)}개")
-    if s["be_cups"] is None:
-        st.error(f"손익분기 없음 — {s['reason']}")
+    with st.container(border=True, width=640):
+        if profit >= 0:
+            st.subheader(f"이 계획대로면 한 달에 {won(profit)}을 남깁니다")
+        else:
+            st.subheader(f"이 계획대로면 한 달에 {won(-profit)} 적자입니다")
+        if rate is not None:
+            st.progress(float(min(rate, 1)), text=f"메뉴를 팔아 남긴 돈으로 고정비의 {pct(rate)}를 메웁니다")
+        for label, value, meaning in [
+            ("월 이익 (고정비 반영)", won(profit), "메뉴를 팔아 남긴 돈 − 월 고정비"),
+            ("손익분기 판매량", cups, "본전이 되려면 한 달에 팔아야 하는 잔 수"),
+            ("손익분기 매출액", sales, "본전이 되는 한 달 매출 (부가세 포함)"),
+            ("고정비 회수율", rate_text(rate), "100% 이상이면 고정비를 다 메우고 남습니다"),
+            ("손해 메뉴", f"{loss_count(menus, fee_pct)}개", "1잔 이익이 0원 이하인 메뉴 수"),
+        ]:
+            left, right = st.columns([3, 2], vertical_alignment="center")
+            left.markdown(f"**{label}**")
+            left.caption(meaning)
+            right.metric(label, value, label_visibility="collapsed")
+        if s["be_cups"] is None:
+            st.error(f"손익분기 없음 — {s['reason']}")
 
     # ③ 월 판매 계획: 판매량은 여기서만 고친다
     with st.expander(f"월 판매 계획 (총 {sum(m['qty'] for m in menus):,}잔)"):
@@ -202,7 +231,7 @@ with tab_scn:
         chart = pd.DataFrame({"월 이익 (원)": [round_won(v["monthly_profit"]) for v in scenarios.values()]}, index=list(scenarios))
         st.bar_chart(chart)
 
-with st.expander("용어 설명"):
+with st.expander("용어 설명", key="glossary"):
     st.markdown(
         "- **1잔 이익** = 판매가 ÷ 1.1 − 원가 − 판매가 × 수수료율 (부가세는 사장님 몫이 아니라 뺍니다)\n"
         "- **원가율** = (원가 + 수수료) ÷ 판매가\n"
