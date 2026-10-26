@@ -43,7 +43,7 @@
 ## 기술 구성
 (권장안. 학생이 바꾸면 이 섹션을 고친다.)
 - Python 3.12 + Streamlit 1.66.0, 가상환경 `.venv/`
-- 폴더: 소스는 `src/`, 문서(SPEC·PLAN·구상)는 `docs/`. CLAUDE.md·README.md·requirements.txt·`.streamlit/config.toml`(화면 테마)는 루트
+- 폴더: 소스·예시 데이터(`menu.csv`)·메뉴 그림(`images/*.svg`)은 `src/`, 문서(SPEC·PLAN·구상)는 `docs/`. CLAUDE.md·README.md·requirements.txt·`.streamlit/config.toml`(화면 테마)는 루트
 - `calc.py`: 계산 함수만. Streamlit을 import하지 않는다.
 - `app.py`: 화면. 계산은 calc.py 함수를 호출한다. 화면 코드 안에서 직접 계산하지 않는다.
 - `check_calc.py`: `python src/check_calc.py` → 모든 사례 통과 시 `check ok`, 실패 시 어떤 사례가 기대값과 다른지 출력
