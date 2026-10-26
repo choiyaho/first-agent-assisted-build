@@ -9,11 +9,16 @@ from calc import (SORT_BY, apply_scenario, cost_ratio, is_loss, loss_count, marg
 
 # 가상의 예시 메뉴 (SPEC D9). 실행 위치와 상관없이 찾도록 app.py 옆의 파일을 읽는다
 EXAMPLE = pd.read_csv(Path(__file__).parent / "menu.csv")
-# 메뉴 하나의 입력 칸. 값은 입력 칸 key(f"{칸}_{메뉴 ID}")의 session_state에만 둔다 → 고치는 곳이 한 군데 (SPEC D10)
-FIELDS = ["name", "price", "cost", "qty"]
+# 메뉴 그림(SVG 글자). menu.csv의 「그림」 열이 파일 이름이고, [+ 메뉴]로 추가한 메뉴는 기본 컵
+PICTURES = {p.name: p.read_text() for p in (Path(__file__).parent / "images").glob("*.svg")}
+# 메뉴 하나의 값. session_state의 f"{칸}_{메뉴 ID}"에만 둔다 → 고치는 곳이 한 군데 (SPEC D10). img는 입력 칸이 아님
+FIELDS = ["name", "price", "cost", "qty", "img"]
 
 # Streamlit 옵션으로 안 되는 화면 다듬기만 CSS로 한다. key를 준 위젯에는 Streamlit이 `st-key-<key>` 클래스를 붙인다
 STYLE = """<style>
+/* 한국어는 낱말 단위로 줄을 바꾼다 ("남깁니/다"처럼 글자 중간에서 끊기지 않게) */
+.stApp, .stApp h1, .stApp h2, .stApp h3, .stApp p { word-break: keep-all !important; overflow-wrap: break-word; }
+
 /* 로고: 기본 h1(2.75rem)의 2배 이상. 좁은 화면에서는 화면 폭에 맞춰 줄인다 */
 [data-testid="stHeading"] h1 { font-size: clamp(3rem, 14vw, 6rem) !important; line-height: 1.1; }
 
@@ -63,17 +68,18 @@ def menus_in_input_order():
     """지금 입력된 메뉴 목록 (먼저 넣은 순 = ID 순). 이름을 비우면 '(이름 없음)'."""
     ss = st.session_state
     return [
-        {"id": i, "name": ss[f"name_{i}"] or "(이름 없음)", "price": ss[f"price_{i}"], "cost": ss[f"cost_{i}"], "qty": ss[f"qty_{i}"]}
+        {"id": i, "name": ss[f"name_{i}"] or "(이름 없음)", "price": ss[f"price_{i}"], "cost": ss[f"cost_{i}"],
+         "qty": ss[f"qty_{i}"], "img": ss[f"img_{i}"]}
         for i in sorted(ss.order)
     ]
 
 
-def put_menu(name, price, cost, qty):
+def put_menu(name, price, cost, qty, img="default.svg"):
     """새 메뉴에 ID를 주고 카드 맨 뒤에 붙인다 (SPEC D11·D16)."""
     ss = st.session_state
     i = ss.next_id
     ss.next_id += 1
-    for f, v in zip(FIELDS, [name, int(price), int(cost), int(qty)]):
+    for f, v in zip(FIELDS, [name, int(price), int(cost), int(qty), img]):
         ss[f"{f}_{i}"] = v
     ss.order.append(i)
 
@@ -99,8 +105,9 @@ def delete_menu(i):
 
 
 def draw_card(m, share, fee_pct):
-    """메뉴 카드 하나: 이름·판매가·원가 입력, 1잔 이익과 비율, 손해 경고 (SPEC D10·D13)."""
+    """메뉴 카드 하나: 그림, 이름·판매가·원가 입력, 1잔 이익과 비율, 손해 경고 (SPEC D10·D13)."""
     i = m["id"]
+    st.image(PICTURES.get(m["img"], PICTURES["default.svg"]), width=96, alt=m["name"])
     st.text_input("메뉴명", key=f"name_{i}", placeholder="(이름 없음)", label_visibility="collapsed")
     left, right = st.columns(2)
     left.number_input("판매가 (원)", min_value=1, step=100, key=f"price_{i}", help="부가세 포함 메뉴판 가격")
@@ -130,7 +137,7 @@ with st.sidebar:
 if "order" not in st.session_state:
     st.session_state.order, st.session_state.next_id = [], 0
     for _, r in EXAMPLE.iterrows():
-        put_menu(r["메뉴"], r["판매가"], r["1잔 원가"], r["월 판매량"])
+        put_menu(r["메뉴"], r["판매가"], r["1잔 원가"], r["월 판매량"], r["그림"])
     st.session_state.order = [m["id"] for m in sort_menus(menus_in_input_order(), SORT_BY[0], fee_pct)]
 
 menus = menus_in_input_order()
@@ -139,13 +146,14 @@ shown = [by_id[i] for i in st.session_state.order]  # 카드에 보이는 순서
 
 st.title("☕ calffeine")
 
-# ② 대시보드: 한 줄에 한 항목씩, 이름·뜻은 왼쪽 숫자는 오른쪽 (SPEC D10·D12)
+# ② 대시보드(왼쪽)와 ③ 월 판매 계획(오른쪽): 판매량을 고치면 바로 옆 숫자가 바뀐다. 좁은 화면에서는 위아래 (SPEC D10·D12)
 if menus:
     s = summary(menus, fixed_cost, fee_pct)
     rate = recovery_rate(menus, fixed_cost, fee_pct)
     profit = s["monthly_profit"]
     cups, sales = be_text(s)
-    with st.container(border=True, width=640):
+    dash, plan = st.columns([3, 2], gap="large")
+    with dash:
         if profit >= 0:
             st.subheader(f"이 계획대로면 한 달에 {won(profit)}을 남깁니다")
         else:
@@ -159,19 +167,19 @@ if menus:
             ("고정비 회수율", rate_text(rate), "100% 이상이면 고정비를 다 메우고 남습니다"),
             ("손해 메뉴", f"{loss_count(menus, fee_pct)}개", "1잔 이익이 0원 이하인 메뉴 수"),
         ]:
-            left, right = st.columns([3, 2], vertical_alignment="center")
+            left, right = st.columns(2, vertical_alignment="center")
             left.markdown(f"**{label}**")
             left.caption(meaning)
             right.metric(label, value, label_visibility="collapsed")
         if s["be_cups"] is None:
             st.error(f"손익분기 없음 — {s['reason']}")
 
-    # ③ 월 판매 계획: 판매량은 여기서만 고친다
-    with st.expander(f"월 판매 계획 (총 {sum(m['qty'] for m in menus):,}잔)"):
+    # 판매량은 여기서만 고친다. 처음부터 펼쳐 둔다
+    with plan, st.expander(f"월 판매 계획 (총 {sum(m['qty'] for m in menus):,}잔)", expanded=True):
         st.caption("메뉴별 예상 월 판매량입니다. 예측이 아니라 사장님이 세우는 가정값입니다.")
-        cols = st.columns(4)
+        cols = st.columns(2)
         for n, m in enumerate(shown):
-            cols[n % 4].number_input(m["name"], min_value=0, step=10, key=f"qty_{m['id']}")
+            cols[n % 2].number_input(m["name"], min_value=0, step=10, key=f"qty_{m['id']}")
 else:
     st.info("메뉴가 없습니다. 아래 메뉴판의 [+ 메뉴]로 첫 메뉴를 추가하세요.")
 

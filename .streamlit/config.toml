@@ -6,6 +6,9 @@ backgroundColor = "#FBFAF7"            # 도자기 잔 흰색
 secondaryBackgroundColor = "#F0ECE6"   # 우유 거품: 사이드바·입력 칸
 textColor = "#2A1F1A"                  # 에스프레소
 borderColor = "#E2DCD3"
+# 글꼴은 하나로 통일하고 굵기로 위계를 준다: 제목 700, 큰 숫자 600
 font = "IBM Plex Sans KR:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap, sans-serif"
-headingFont = "Gowun Batang:https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap, serif"
+headingFontWeights = 700
+metricValueFontWeight = 600
+metricValueFontSize = "2rem"
 chartCategoricalColors = ["#2E6A4F"]
