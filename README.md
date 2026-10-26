@@ -6,7 +6,7 @@
 
 > 초안 (Claude 작성).
 
-배포 앱: https://<앱 이름>.streamlit.app (배포 후 주소로 바꾼다)
+배포 앱: https://calffeine.streamlit.app
 한동안 접속이 없으면 앱이 잠듭니다. 처음 열 때 깨우기 버튼이 보이면 눌러 주세요. 잠시 뒤 실행됩니다.
 
 로컬 실행 (Python 3.12)
