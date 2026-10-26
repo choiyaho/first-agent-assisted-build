@@ -75,6 +75,13 @@ def qty_guide(change):
     return "판매량 기준: 가격이 그대로면 판매량이 는 만큼 더 남습니다."
 
 
+def qty_guide_short(change):
+    """가격 변화별 판매량 기준표의 한 칸 (SPEC D7)."""
+    if change is None:
+        return "계산할 수 없음"
+    return f"최대 {pct(-change)} 줄어도 됨" if change < 0 else f"{pct(change)} 넘게 늘어야 함"
+
+
 def menus_in_input_order():
     """지금 입력된 메뉴 목록 (먼저 넣은 순 = ID 순). 이름을 비우면 '(이름 없음)'."""
     ss = st.session_state
@@ -222,22 +229,31 @@ with tab_scn:
         st.info("메뉴를 추가하면 시나리오를 비교할 수 있습니다.")
     else:
         st.subheader("가격을 바꾸면 한 달에 얼마나 남을까?")
-        st.caption("가격을 올리면 손님이 줄고, 내리면 늘 수 있습니다. A안·B안마다 가격을 바꿔 보고 판매량이 얼마나 변할지 "
-                   "예상해 보세요. 예상이 각 안 아래의 판매량 기준보다 좋으면 지금보다 남습니다. 모든 메뉴에 같은 비율로 적용됩니다.")
-        scenario_menus = {"지금": menus}
-        for col, name, price0, qty0 in zip(st.columns(2, gap="large"), ["A", "B"], [10, -10], [-10, 20]):
-            with col.container(border=True):
-                st.markdown(f"**{name}안**")
-                price = st.slider("판매가를 이만큼 바꾸면", -50, 50, price0, format="%+d%%", key=f"{name.lower()}_price")
-                qty = st.slider("판매량은 이만큼 바뀔 것 같다", -50, 50, qty0, format="%+d%%", key=f"{name.lower()}_qty")
-                st.caption(qty_guide(breakeven_qty_change(menus, price, fee_pct)))
-            scenario_menus[f"{name}안 (가격 {price:+d}%, 판매량 {qty:+d}%)"] = apply_scenario(menus, price, qty)
+        st.caption("가격을 올리면 손님이 줄고, 내리면 늘 수 있습니다. 가격을 얼마나 바꿀지와 그때 판매량이 얼마나 변할지 "
+                   "예상해 보세요. 예상이 판매량 기준보다 좋으면 지금보다 남습니다. 모든 메뉴에 같은 비율로 적용됩니다.")
+        left, right = st.columns([3, 2], gap="large")
+        with left.container(border=True):
+            st.markdown("**바꿀 안**")
+            price = st.slider("판매가를 이만큼 바꾸면", -50, 50, 10, format="%+d%%", key="plan_price")
+            qty = st.slider("판매량은 이만큼 바뀔 것 같다", -50, 50, -10, format="%+d%%", key="plan_qty")
+            st.caption(qty_guide(breakeven_qty_change(menus, price, fee_pct)))
+        with right:
+            # 올릴지 내릴지는 추측 없이 계산되는 기준으로 비교한다 (두 안의 판매량 추측끼리 비교하지 않는다)
+            st.markdown("**가격 변화별 판매량 기준**")
+            st.dataframe(
+                pd.DataFrame([{"가격 변화": f"{p:+d}%", "지금만큼 남으려면 판매량은": qty_guide_short(breakeven_qty_change(menus, p, fee_pct))}
+                              for p in (-20, -10, -5, 5, 10, 20)]),
+                hide_index=True,
+                width="stretch",
+            )
+
+        scenario_menus = {"지금": menus, f"바꾼 안 (가격 {price:+d}%, 판매량 {qty:+d}%)": apply_scenario(menus, price, qty)}
         scenarios = {k: summary(ms, fixed_cost, fee_pct) for k, ms in scenario_menus.items()}
         rates = {k: recovery_rate(ms, fixed_cost, fee_pct) for k, ms in scenario_menus.items()}
 
         st.markdown("**한 달에 남는 돈 (월 이익)**")
         now = scenarios["지금"]["monthly_profit"]
-        for col, (k, v) in zip(st.columns(3), scenarios.items()):
+        for col, (k, v) in zip(st.columns(2), scenarios.items()):
             diff = v["monthly_profit"] - now  # 지금과의 차이: 두 계산 결과를 빼서 보여주기만 한다
             col.metric(k, won(v["monthly_profit"]), border=True,
                        delta=None if k == "지금" else ("+" if diff > 0 else "") + won(diff),

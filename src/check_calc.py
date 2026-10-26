@@ -73,6 +73,10 @@ check("C9", "회수율 현재·A·B", [pct1(recovery_rate(ms, 5_000_000, FEE)) f
 # C10: 판매가만 바꿨을 때 지금 월 이익을 지키는 판매량 변화 (판매량 기준)
 check("C10", "가격 +10%·−10%", [pct1(breakeven_qty_change(C2_MENUS, p, FEE)) for p in (10, -10)], [-12.1, 16.0])
 
+# C11: 가격 변화별 판매량 기준표
+check("C11", "가격 −20·−10·−5·+5·+10·+20%", [pct1(breakeven_qty_change(C2_MENUS, p, FEE)) for p in (-20, -10, -5, 5, 10, 20)],
+      [38.1, 16.0, 7.4, -6.5, -12.1, -21.6])
+
 # E3: C2에 손해 메뉴(E1 디저트) 추가
 check("E3", "손해 메뉴 수", loss_count(C2_MENUS + [dessert], FEE), 1)
 
