@@ -1,0 +1,11 @@
+# calffeine 화면 테마. 저장소 루트에서 streamlit run을 해야 적용된다 (배포 서버도 루트에서 읽는다)
+[theme]
+base = "light"
+primaryColor = "#2E6A4F"               # 커피나무 잎 초록: 버튼·슬라이더·회수율 막대 ("남는 돈")
+backgroundColor = "#FBFAF7"            # 도자기 잔 흰색
+secondaryBackgroundColor = "#F0ECE6"   # 우유 거품: 사이드바·입력 칸
+textColor = "#2A1F1A"                  # 에스프레소
+borderColor = "#E2DCD3"
+font = "IBM Plex Sans KR:https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap, sans-serif"
+headingFont = "Gowun Batang:https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap, serif"
+chartCategoricalColors = ["#2E6A4F"]

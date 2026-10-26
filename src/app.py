@@ -4,11 +4,13 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
-from calc import apply_scenario, cost_ratio, margin_ratio, pct1, profit_per_cup, round_won, summary
+from calc import (SORT_BY, apply_scenario, cost_ratio, is_loss, loss_count, margin_ratio, pct1, profit_per_cup,
+                  recovery_rate, round_won, sales_shares, sort_menus, summary)
 
-# 가상의 예시 메뉴 (SPEC D9). 첫 두 줄은 SPEC 5번 C2와 같은 값, 나머지는 개인 카페 수준으로 어림한 가상 값
-# 실행 위치와 상관없이 찾도록 app.py 옆의 파일을 읽는다
+# 가상의 예시 메뉴 (SPEC D9). 실행 위치와 상관없이 찾도록 app.py 옆의 파일을 읽는다
 EXAMPLE = pd.read_csv(Path(__file__).parent / "menu.csv")
+# 메뉴 하나의 입력 칸. 값은 입력 칸 key(f"{칸}_{메뉴 ID}")의 session_state에만 둔다 → 고치는 곳이 한 군데 (SPEC D10)
+FIELDS = ["name", "price", "cost", "qty"]
 
 
 def won(x):
@@ -23,118 +25,191 @@ def pct(ratio):
 
 
 def be_text(s):
-    """손익분기 결과를 (잔 수, 매출액) 문자열 쌍으로. 없으면 ('없음', 이유)."""
+    """손익분기 결과를 (잔 수, 매출액) 문자열 쌍으로. 없으면 ('없음', '없음')."""
     if s["be_cups"] is None:
-        return "없음", s["reason"]
+        return "없음", "없음"
     return f"{s['be_cups']:,}잔", f"{s['be_sales']:,}원"
 
 
+def rate_text(rate):
+    """고정비 회수율 문자열. 계산할 수 없으면 '손익분기 없음' (SPEC D12)."""
+    return "손익분기 없음" if rate is None else pct(rate)
+
+
+def menus_in_input_order():
+    """지금 입력된 메뉴 목록 (먼저 넣은 순 = ID 순). 이름을 비우면 '(이름 없음)'."""
+    ss = st.session_state
+    return [
+        {"id": i, "name": ss[f"name_{i}"] or "(이름 없음)", "price": ss[f"price_{i}"], "cost": ss[f"cost_{i}"], "qty": ss[f"qty_{i}"]}
+        for i in sorted(ss.order)
+    ]
+
+
+def put_menu(name, price, cost, qty):
+    """새 메뉴에 ID를 주고 카드 맨 뒤에 붙인다 (SPEC D11·D16)."""
+    ss = st.session_state
+    i = ss.next_id
+    ss.next_id += 1
+    for f, v in zip(FIELDS, [name, int(price), int(cost), int(qty)]):
+        ss[f"{f}_{i}"] = v
+    ss.order.append(i)
+
+
+def resort():
+    """고른 정렬 기준으로 카드 순서를 다시 정한다. 정렬 기준을 바꿀 때와 [다시 정렬]에서만 부른다 (SPEC D11)."""
+    ss = st.session_state
+    ss.order = [m["id"] for m in sort_menus(menus_in_input_order(), ss.sort_by, ss.fee_pct)]
+
+
+def add_from_form():
+    """[+ 메뉴] 양식에 넣은 값으로 메뉴를 추가한다."""
+    ss = st.session_state
+    put_menu(ss.new_name, ss.new_price, ss.new_cost, ss.new_qty)
+
+
+def delete_menu(i):
+    """메뉴 하나를 지운다. 다른 카드 순서는 그대로 (SPEC D16)."""
+    ss = st.session_state
+    ss.order.remove(i)
+    for f in FIELDS:
+        del ss[f"{f}_{i}"]
+
+
+def draw_card(m, share, fee_pct):
+    """메뉴 카드 하나: 이름·판매가·원가 입력, 1잔 이익과 비율, 손해 경고 (SPEC D10·D13)."""
+    i = m["id"]
+    st.text_input("메뉴명", key=f"name_{i}", placeholder="(이름 없음)", label_visibility="collapsed")
+    left, right = st.columns(2)
+    left.number_input("판매가 (원)", min_value=1, step=100, key=f"price_{i}", help="부가세 포함 메뉴판 가격")
+    right.number_input("1잔 원가 (원)", min_value=0, step=100, key=f"cost_{i}", help="재료 + 포장")
+    st.metric("1잔 이익", won(profit_per_cup(m["price"], m["cost"], fee_pct)))
+    st.caption(
+        f"원가율 {pct(cost_ratio(m['price'], m['cost'], fee_pct))}, "
+        f"마진율 {pct(margin_ratio(m['price'], m['cost'], fee_pct))}, 매출 비중 {pct(share)}"
+    )
+    if is_loss(m["price"], m["cost"], fee_pct):
+        st.error("1잔을 팔아도 남는 돈이 없습니다 (0원 이하). 판매가를 올리거나 원가를 줄여 보세요.")
+    st.button("삭제", key=f"del_{i}", on_click=delete_menu, args=(i,), type="tertiary")
+
+
 st.set_page_config(page_title="calffeine", page_icon="☕", layout="wide")
+
+# ① 사이드바: 고정비·수수료율 (SPEC D15: 고정비 1원 이상)
+with st.sidebar:
+    st.header("가게 정보")
+    fixed_cost = st.number_input("월 고정비 (원)", min_value=1, value=5_000_000, step=100_000, key="fixed_cost",
+                                 help="임대료·인건비·공과금 등. 사장님 본인 인건비도 포함하는 것을 권장합니다.")
+    fee_pct = st.number_input("카드 수수료율 (%)", min_value=0.0, max_value=100.0, value=2.0, step=0.1, key="fee_pct",
+                              help="결제 중 카드 비율을 감안한 평균 수수료율을 넣으세요.")
+
+# 처음 열 때 한 번만 예시 메뉴를 채우고 기본 기준(매출 비중)으로 정렬한다
+if "order" not in st.session_state:
+    st.session_state.order, st.session_state.next_id = [], 0
+    for _, r in EXAMPLE.iterrows():
+        put_menu(r["메뉴"], r["판매가"], r["1잔 원가"], r["월 판매량"])
+    st.session_state.order = [m["id"] for m in sort_menus(menus_in_input_order(), SORT_BY[0], fee_pct)]
+
+menus = menus_in_input_order()
+by_id = {m["id"]: m for m in menus}
+shown = [by_id[i] for i in st.session_state.order]  # 카드에 보이는 순서
+
 st.title("☕ calffeine")
 st.caption("메뉴 가격을 감이 아니라 숫자로 정하기. 입력한 값은 저장되지 않습니다.")
 
-# ① 사이드바: 고정비·수수료율
-with st.sidebar:
-    st.header("가게 정보")
-    fixed_cost = st.number_input("월 고정비 (원)", min_value=0, value=5_000_000, step=100_000,
-                                 help="임대료·인건비·공과금 등. 사장님 본인 인건비도 포함하는 것을 권장합니다.")
-    fee_pct = st.number_input("카드 수수료율 (%)", min_value=0.0, max_value=100.0, value=2.0, step=0.1,
-                              help="결제 중 카드 비율을 감안한 평균 수수료율을 넣으세요.")
+# ② 대시보드 (SPEC D10·D12)
+if menus:
+    s = summary(menus, fixed_cost, fee_pct)
+    rate = recovery_rate(menus, fixed_cost, fee_pct)
+    profit = s["monthly_profit"]
+    if profit >= 0:
+        st.subheader(f"이 계획대로면 한 달에 {won(profit)}을 남깁니다")
+    else:
+        st.subheader(f"이 계획대로면 한 달에 {won(-profit)} 적자입니다")
+    if rate is not None:
+        st.progress(float(min(rate, 1)), text=f"메뉴를 팔아 남긴 돈으로 고정비의 {pct(rate)}를 메웁니다")
+    cups, sales = be_text(s)
+    c = st.columns(5)
+    c[0].metric("월 이익 (고정비 반영)", won(profit))
+    c[1].metric("손익분기 판매량", cups)
+    c[2].metric("손익분기 매출액", sales)
+    c[3].metric("고정비 회수율", rate_text(rate))
+    c[4].metric("손해 메뉴", f"{loss_count(menus, fee_pct)}개")
+    if s["be_cups"] is None:
+        st.error(f"손익분기 없음 — {s['reason']}")
 
-# ② 메뉴 표 편집
-st.subheader("1. 메뉴 입력")
-edited = st.data_editor(
-    EXAMPLE,
-    num_rows="dynamic",
-    width="stretch",
-    column_config={
-        "판매가": st.column_config.NumberColumn("판매가 (부가세 포함, 원)", step=100),
-        "1잔 원가": st.column_config.NumberColumn("1잔 원가 (재료+포장, 원)", step=100),
-        "월 판매량": st.column_config.NumberColumn("월 판매량 (잔)", step=10),
-    },
-)
+    # ③ 월 판매 계획: 판매량은 여기서만 고친다
+    with st.expander(f"월 판매 계획 (총 {sum(m['qty'] for m in menus):,}잔)"):
+        st.caption("메뉴별 예상 월 판매량입니다. 예측이 아니라 사장님이 세우는 가정값입니다.")
+        cols = st.columns(4)
+        for n, m in enumerate(shown):
+            cols[n % 4].number_input(m["name"], min_value=0, step=10, key=f"qty_{m['id']}")
+else:
+    st.info("메뉴가 없습니다. 아래 메뉴판의 [+ 메뉴]로 첫 메뉴를 추가하세요.")
 
-# 빈 칸·음수 행은 계산에서 빼고 이유를 보여준다 (멈추지 않는다)
-rows = edited.dropna(subset=["판매가", "1잔 원가", "월 판매량"])
-bad = (rows[["판매가", "1잔 원가", "월 판매량"]] < 0).any(axis=1)
-if len(rows) < len(edited):
-    st.warning("판매가·원가·판매량 중 빈 칸이 있는 행은 계산에서 뺐습니다.")
-if bad.any():
-    st.warning("음수가 들어 있는 행은 계산에서 뺐습니다.")
-rows = rows[~bad]
-menus = [
-    {"name": r["메뉴"] or "(이름 없음)", "price": int(r["판매가"]), "cost": int(r["1잔 원가"]), "qty": int(r["월 판매량"])}
-    for _, r in rows.iterrows()
-]
-if not menus:
-    st.info("계산할 메뉴가 없습니다. 위 표에 메뉴를 한 줄 이상 입력하세요.")
-    st.stop()
+tab_menu, tab_scn = st.tabs(["메뉴판", "시나리오 비교"])
 
-s = summary(menus, fixed_cost, fee_pct)
-be_cups, be_sales = be_text(s)
-
-# ③④ 숫자 카드
-st.subheader("2. 가게 전체")
-c1, c2, c3 = st.columns(3)
-c1.metric("월 이익 (고정비 반영)", won(s["monthly_profit"]))
-c2.metric("손익분기 판매량", be_cups)
-c3.metric("손익분기 매출액", be_sales)
-if s["be_cups"] is None:
-    st.error(f"손익분기 없음 — {s['reason']}")
-
-tab_menu, tab_scn = st.tabs(["메뉴별 마진", "시나리오 비교"])
-
+# ④ 메뉴판 카드 그리드 (SPEC D11·D16)
 with tab_menu:
-    table = pd.DataFrame(
-        [
-            {
-                "메뉴": m["name"],
-                "1잔 이익": won(profit_per_cup(m["price"], m["cost"], fee_pct)),
-                "원가율": pct(cost_ratio(m["price"], m["cost"], fee_pct)),
-                "마진율": pct(margin_ratio(m["price"], m["cost"], fee_pct)),
-            }
-            for m in menus
-        ]
-    )
-    st.dataframe(table, hide_index=True, width="stretch")
-    for m in menus:
-        if profit_per_cup(m["price"], m["cost"], fee_pct) < 0:
-            st.warning(f"⚠️ {m['name']}: 1잔을 팔 때마다 손해입니다. 판매가를 올리거나 원가를 줄여 보세요.")
-    with st.expander("용어 설명"):
-        st.markdown(
-            "- **1잔 이익** = 판매가 ÷ 1.1 − 원가 − 판매가 × 수수료율 (부가세는 사장님 몫이 아니라 뺍니다)\n"
-            "- **원가율** = (원가 + 수수료) ÷ 판매가\n"
-            "- **마진율** = 1잔 이익 ÷ 판매가\n"
-            "- 원가율 + 마진율 = 90.9% (나머지 9.1%는 부가세)\n"
-            "- **손익분기** = 월 이익이 0원이 되는 판매량. 메뉴 판매 비중은 지금 입력한 그대로로 봅니다."
-        )
+    a, b, c = st.columns([3, 1, 1], vertical_alignment="bottom")
+    a.selectbox("정렬 기준", SORT_BY, key="sort_by", on_change=resort,
+                help="값을 고쳐도 카드는 제자리에 있습니다. 바뀐 값으로 다시 줄 세우려면 [다시 정렬]을 누르세요.")
+    b.button("다시 정렬", on_click=resort, width="stretch")
+    with c.popover("+ 메뉴", width="stretch"):
+        with st.form("add_menu", clear_on_submit=True):
+            st.text_input("메뉴명", key="new_name")
+            st.number_input("판매가 (부가세 포함, 원)", min_value=1, value=5000, step=100, key="new_price")
+            st.number_input("1잔 원가 (재료+포장, 원)", min_value=0, value=1500, step=100, key="new_cost")
+            st.number_input("월 판매량 (잔)", min_value=0, value=100, step=10, key="new_qty")
+            st.form_submit_button("메뉴 추가", on_click=add_from_form)
 
+    shares = dict(zip(by_id, sales_shares(menus)))
+    for row in range(0, len(shown), 3):
+        for col, m in zip(st.columns(3), shown[row:row + 3]):
+            with col.container(border=True):
+                draw_card(m, shares[m["id"]], fee_pct)
+
+# ⑤ 시나리오 비교 (SPEC D7)
 with tab_scn:
-    st.caption("전체 메뉴의 판매가와 판매량을 같은 비율로 바꿔 비교합니다.")
-    a, b = st.columns(2)
-    with a:
-        st.markdown("**시나리오 A**")
-        a_price = st.slider("A 판매가 변화 (%)", -50, 50, 10, key="a_price")
-        a_qty = st.slider("A 판매량 변화 (%)", -50, 50, -10, key="a_qty")
-    with b:
-        st.markdown("**시나리오 B**")
-        b_price = st.slider("B 판매가 변화 (%)", -50, 50, -10, key="b_price")
-        b_qty = st.slider("B 판매량 변화 (%)", -50, 50, 20, key="b_qty")
+    if not menus:
+        st.info("메뉴를 추가하면 시나리오를 비교할 수 있습니다.")
+    else:
+        st.caption("전체 메뉴의 판매가와 판매량을 같은 비율로 바꿔 비교합니다. 판매량만 바꾸면 판매 비중이 그대로라 "
+                   "손익분기 판매량은 변하지 않습니다. 판매량 변화의 효과는 월 이익과 고정비 회수율에서 보입니다.")
+        a, b = st.columns(2)
+        with a:
+            st.markdown("**시나리오 A**")
+            a_price = st.slider("A 판매가 변화 (%)", -50, 50, 10, key="a_price")
+            a_qty = st.slider("A 판매량 변화 (%)", -50, 50, -10, key="a_qty")
+        with b:
+            st.markdown("**시나리오 B**")
+            b_price = st.slider("B 판매가 변화 (%)", -50, 50, -10, key="b_price")
+            b_qty = st.slider("B 판매량 변화 (%)", -50, 50, 20, key="b_qty")
 
-    scenarios = {
-        "현재": s,
-        "A": summary(apply_scenario(menus, a_price, a_qty), fixed_cost, fee_pct),
-        "B": summary(apply_scenario(menus, b_price, b_qty), fixed_cost, fee_pct),
-    }
-    st.dataframe(
-        pd.DataFrame(
-            [
-                {"시나리오": k, "월 이익": won(v["monthly_profit"]), "손익분기 판매량": be_text(v)[0], "손익분기 매출액": be_text(v)[1]}
-                for k, v in scenarios.items()
-            ]
-        ),
-        hide_index=True,
-        width="stretch",
+        scenario_menus = {"현재": menus, "A": apply_scenario(menus, a_price, a_qty), "B": apply_scenario(menus, b_price, b_qty)}
+        scenarios = {k: summary(ms, fixed_cost, fee_pct) for k, ms in scenario_menus.items()}
+        rates = {k: recovery_rate(ms, fixed_cost, fee_pct) for k, ms in scenario_menus.items()}
+        st.dataframe(
+            pd.DataFrame(
+                [
+                    {"시나리오": k, "월 이익": won(v["monthly_profit"]), "손익분기 판매량": be_text(v)[0],
+                     "손익분기 매출액": be_text(v)[1], "고정비 회수율": rate_text(rates[k])}
+                    for k, v in scenarios.items()
+                ]
+            ),
+            hide_index=True,
+            width="stretch",
+        )
+        chart = pd.DataFrame({"월 이익 (원)": [round_won(v["monthly_profit"]) for v in scenarios.values()]}, index=list(scenarios))
+        st.bar_chart(chart)
+
+with st.expander("용어 설명"):
+    st.markdown(
+        "- **1잔 이익** = 판매가 ÷ 1.1 − 원가 − 판매가 × 수수료율 (부가세는 사장님 몫이 아니라 뺍니다)\n"
+        "- **원가율** = (원가 + 수수료) ÷ 판매가\n"
+        "- **마진율** = 1잔 이익 ÷ 판매가\n"
+        "- 원가율 + 마진율 = 90.9% (나머지 9.1%는 부가세)\n"
+        "- **매출 비중** = 메뉴 매출(판매가 × 월 판매량) ÷ 전체 매출. 반올림 때문에 합이 100%가 아닐 수 있습니다.\n"
+        "- **고정비 회수율** = 메뉴를 팔아 남긴 돈(1잔 이익 × 월 판매량의 합) ÷ 월 고정비. 100% 이상이면 흑자입니다.\n"
+        "- **손해 메뉴** = 1잔 이익이 0원 이하인 메뉴\n"
+        "- **손익분기** = 월 이익이 0원이 되는 판매량. 메뉴 판매 비중은 지금 입력한 그대로로 봅니다."
     )
-    chart = pd.DataFrame({"월 이익 (원)": [round_won(v["monthly_profit"]) for v in scenarios.values()]}, index=list(scenarios))
-    st.bar_chart(chart)
