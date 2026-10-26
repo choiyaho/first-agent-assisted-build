@@ -205,26 +205,32 @@ with tab_menu:
             with col.container(border=True):
                 draw_card(m, shares[m["id"]], fee_pct)
 
-# ⑤ 시나리오 비교 (SPEC D7)
+# ⑤ 시나리오 비교: "가격을 바꾸면 손님 수가 변해도 더 남나?"를 지금과 나란히 본다 (SPEC D7)
 with tab_scn:
     if not menus:
         st.info("메뉴를 추가하면 시나리오를 비교할 수 있습니다.")
     else:
-        st.caption("전체 메뉴의 판매가와 판매량을 같은 비율로 바꿔 비교합니다. 판매량만 바꾸면 판매 비중이 그대로라 "
-                   "손익분기 판매량은 변하지 않습니다. 판매량 변화의 효과는 월 이익과 고정비 회수율에서 보입니다.")
-        a, b = st.columns(2)
-        with a:
-            st.markdown("**시나리오 A**")
-            a_price = st.slider("A 판매가 변화 (%)", -50, 50, 10, key="a_price")
-            a_qty = st.slider("A 판매량 변화 (%)", -50, 50, -10, key="a_qty")
-        with b:
-            st.markdown("**시나리오 B**")
-            b_price = st.slider("B 판매가 변화 (%)", -50, 50, -10, key="b_price")
-            b_qty = st.slider("B 판매량 변화 (%)", -50, 50, 20, key="b_qty")
-
-        scenario_menus = {"현재": menus, "A": apply_scenario(menus, a_price, a_qty), "B": apply_scenario(menus, b_price, b_qty)}
+        st.subheader("가격을 바꾸면 한 달에 얼마나 남을까?")
+        st.caption("가격을 올리면 손님이 줄고, 내리면 늘 수 있습니다. 두 가지 경우를 A안·B안으로 정해 지금과 비교해 보세요. "
+                   "모든 메뉴에 같은 비율로 적용됩니다.")
+        scenario_menus = {"지금": menus}
+        for col, name, price0, qty0 in zip(st.columns(2, gap="large"), ["A", "B"], [10, -10], [-10, 20]):
+            with col.container(border=True):
+                st.markdown(f"**{name}안**")
+                price = st.slider("판매가를 이만큼 바꾸면", -50, 50, price0, format="%+d%%", key=f"{name.lower()}_price")
+                qty = st.slider("판매량은 이만큼 바뀔 것 같다", -50, 50, qty0, format="%+d%%", key=f"{name.lower()}_qty")
+            scenario_menus[f"{name}안 (가격 {price:+d}%, 판매량 {qty:+d}%)"] = apply_scenario(menus, price, qty)
         scenarios = {k: summary(ms, fixed_cost, fee_pct) for k, ms in scenario_menus.items()}
         rates = {k: recovery_rate(ms, fixed_cost, fee_pct) for k, ms in scenario_menus.items()}
+
+        st.markdown("**한 달에 남는 돈 (월 이익)**")
+        now = scenarios["지금"]["monthly_profit"]
+        for col, (k, v) in zip(st.columns(3), scenarios.items()):
+            diff = v["monthly_profit"] - now  # 지금과의 차이: 두 계산 결과를 빼서 보여주기만 한다
+            col.metric(k, won(v["monthly_profit"]), border=True,
+                       delta=None if k == "지금" else ("+" if diff > 0 else "") + won(diff),
+                       delta_description=None if k == "지금" else "지금보다")
+
         st.dataframe(
             pd.DataFrame(
                 [
@@ -236,8 +242,8 @@ with tab_scn:
             hide_index=True,
             width="stretch",
         )
-        chart = pd.DataFrame({"월 이익 (원)": [round_won(v["monthly_profit"]) for v in scenarios.values()]}, index=list(scenarios))
-        st.bar_chart(chart)
+        st.caption("판매량만 바꾸면 메뉴별 판매 비중이 그대로라 손익분기 판매량은 변하지 않습니다. "
+                   "판매량 변화의 효과는 월 이익과 고정비 회수율에서 보입니다.")
 
 with st.expander("용어 설명", key="glossary"):
     st.markdown(
