@@ -42,13 +42,14 @@
 
 ## 기술 구성
 (권장안. 학생이 바꾸면 이 섹션을 고친다.)
-- Python 3 + Streamlit, 가상환경 `.venv/`
-- 폴더: 소스는 `src/`, 문서(SPEC·PLAN·구상)는 `docs/`. CLAUDE.md·README.md·requirements.txt는 루트
+- Python 3.12 + Streamlit 1.66.0, 가상환경 `.venv/`
+- 폴더: 소스는 `src/`, 문서(SPEC·PLAN·구상)는 `docs/`. CLAUDE.md·README.md·requirements.txt·`.streamlit/config.toml`(화면 테마)는 루트
 - `calc.py`: 계산 함수만. Streamlit을 import하지 않는다.
 - `app.py`: 화면. 계산은 calc.py 함수를 호출한다. 화면 코드 안에서 직접 계산하지 않는다.
 - `check_calc.py`: `python src/check_calc.py` → 모든 사례 통과 시 `check ok`, 실패 시 어떤 사례가 기대값과 다른지 출력
-- `requirements.txt`: streamlit. 그 외 패키지는 묻는다.
+- `requirements.txt`: `streamlit==1.66.0` (배포 서버가 로컬에서 검증한 버전을 설치하도록 고정). 그 외 패키지는 묻는다.
 - 실행: `streamlit run src/app.py`
+- 배포: Streamlit Community Cloud (main 브랜치, `src/app.py`, Python 3.12, SPEC D14). main에 push하면 자동으로 다시 배포되므로 push 전에 `check ok`와 화면 확인을 한다. 배포 설정은 학생이 웹에서 한다.
 - 금액은 원 단위. 비율 자릿수와 반올림은 SPEC.md 정의 결정 D8을 따른다.
 - 코드는 학생이 디펜스에서 설명할 수 있게 짧고 단순하게 쓴다. 함수마다 한 줄 설명을 단다.
 
