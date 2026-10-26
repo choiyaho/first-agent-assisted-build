@@ -50,6 +50,51 @@ def summary(menus, fixed_cost, fee_pct):
     return result
 
 
+def recovery_rate(menus, fixed_cost, fee_pct):
+    """고정비 회수율 = Σ(1잔 이익×판매량) ÷ 월 고정비. Σ ≤ 0이면 None("손익분기 없음") (SPEC D12)."""
+    total_profit = sum(profit_per_cup(m["price"], m["cost"], fee_pct) * Fraction(m["qty"]) for m in menus)
+    return None if total_profit <= 0 else total_profit / Fraction(fixed_cost)
+
+
+def sales_shares(menus):
+    """메뉴별 매출 비중 = 판매가×판매량 ÷ 총매출. 총매출이 0이면 모두 None (SPEC D11)."""
+    sales = [Fraction(m["price"]) * Fraction(m["qty"]) for m in menus]
+    total = sum(sales)
+    return [None if total == 0 else s / total for s in sales]
+
+
+def is_loss(price, cost, fee_pct):
+    """손해 메뉴 = 1잔 이익 ≤ 0원 (SPEC D13)."""
+    return profit_per_cup(price, cost, fee_pct) <= 0
+
+
+def loss_count(menus, fee_pct):
+    """손해 메뉴 수."""
+    return sum(is_loss(m["price"], m["cost"], fee_pct) for m in menus)
+
+
+SORT_BY = ["매출 비중", "마진율", "1잔 이익", "판매가", "입력 순서"]
+
+
+def sort_menus(menus, by, fee_pct):
+    """카드 순서: 고른 기준 높은 순 → 같으면 마진율 높은 순 → 같으면 입력 순서 (SPEC D11)."""
+    if by == "입력 순서":
+        return list(menus)
+
+    def key(m):
+        margin = margin_ratio(m["price"], m["cost"], fee_pct)
+        first = {
+            "매출 비중": Fraction(m["price"]) * Fraction(m["qty"]),  # 분모(총매출)가 같아 매출 순서 = 비중 순서
+            "마진율": margin,
+            "1잔 이익": profit_per_cup(m["price"], m["cost"], fee_pct),
+            "판매가": Fraction(m["price"]),
+        }[by]
+        return (-first, -margin)
+
+    # sorted는 같은 값이면 원래 순서를 지키므로 입력 순서가 마지막 기준이 된다
+    return sorted(menus, key=key)
+
+
 def apply_scenario(menus, price_pct, qty_pct):
     """모든 메뉴의 판매가와 판매량을 %만큼 바꾼 새 메뉴 목록 (SPEC D7)."""
     p = 1 + Fraction(str(price_pct)) / 100
