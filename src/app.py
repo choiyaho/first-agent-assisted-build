@@ -112,6 +112,8 @@ def add_from_form():
     """[+ 메뉴] 양식에 넣은 값으로 메뉴를 추가한다."""
     ss = st.session_state
     put_menu(ss.new_name, ss.new_price, ss.new_cost, ss.new_qty)
+    # 새 카드는 맨 아래에 붙어 화면 밖일 수 있으니 추가된 것을 알려준다
+    st.toast(f"‘{ss.new_name or '(이름 없음)'}’ 메뉴를 메뉴판 맨 뒤에 추가했습니다.")
 
 
 def delete_menu(i):
@@ -148,6 +150,7 @@ with st.sidebar:
     st.header("가게 정보")
     fixed_cost = st.number_input("월 고정비 (원)", min_value=1, value=5_000_000, step=100_000, key="fixed_cost",
                                  help="임대료·인건비·공과금 등. 사장님 본인 인건비도 포함하는 것을 권장합니다.")
+    st.caption(won(fixed_cost))  # 입력 칸은 쉼표를 못 넣어서(숫자만 표시) 읽기 쉬운 금액을 아래에 보여준다
     fee_pct = st.number_input("카드 수수료율 (%)", min_value=0.0, max_value=100.0, value=2.0, step=0.1, key="fee_pct",
                               help="결제 중 카드 비율을 감안한 평균 수수료율을 넣으세요.")
 
@@ -210,7 +213,8 @@ with tab_menu:
                 help="값을 고쳐도 카드는 제자리에 있습니다. 바뀐 값으로 다시 줄 세우려면 [다시 정렬]을 누르세요.")
     b.button("다시 정렬", on_click=resort, width="stretch")
     with c.popover("+ 메뉴", width="stretch"):
-        with st.form("add_menu", clear_on_submit=True):
+        # Enter로 제출하면 판매가·원가를 넣기 전에 기본값으로 추가돼서 [메뉴 추가] 버튼으로만 제출한다
+        with st.form("add_menu", clear_on_submit=True, enter_to_submit=False):
             st.text_input("메뉴명", key="new_name")
             st.number_input("판매가 (부가세 포함, 원)", min_value=1, value=5000, step=100, key="new_price")
             st.number_input("1잔 원가 (재료+포장, 원)", min_value=0, value=1500, step=100, key="new_cost")
