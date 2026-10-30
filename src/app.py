@@ -130,8 +130,8 @@ def draw_card(m, share, fee_pct):
     st.image(PICTURES.get(m["img"], PICTURES["default.svg"]), width=96, alt=m["name"])
     st.text_input("메뉴명", key=f"name_{i}", placeholder="(이름 없음)", label_visibility="collapsed")
     left, right = st.columns(2)
-    left.number_input("판매가 (원)", min_value=1, step=100, key=f"price_{i}", help="부가세 포함 메뉴판 가격")
-    right.number_input("1잔 원가 (원)", min_value=0, step=100, key=f"cost_{i}", help="재료 + 포장")
+    left.number_input("판매가 (원)", min_value=1, step=100, key=f"price_{i}")
+    right.number_input("1잔 원가 (원)", min_value=0, step=100, key=f"cost_{i}")
     st.metric("1잔 이익", won(profit_per_cup(m["price"], m["cost"], fee_pct)))
     st.caption(
         f"원가율 {pct(cost_ratio(m['price'], m['cost'], fee_pct))}, "
@@ -221,6 +221,8 @@ with tab_menu:
             st.number_input("월 판매량 (잔)", min_value=0, value=100, step=10, key="new_qty")
             st.form_submit_button("메뉴 추가", on_click=add_from_form)
 
+    # 카드마다 붙던 도움말 아이콘 대신 한 번만 알려준다
+    st.caption("판매가는 부가세를 포함한 메뉴판 가격, 1잔 원가는 재료와 포장을 합친 값입니다.")
     shares = dict(zip(by_id, sales_shares(menus)))
     for row in range(0, len(shown), 3):
         for col, m in zip(st.columns(3), shown[row:row + 3]):
